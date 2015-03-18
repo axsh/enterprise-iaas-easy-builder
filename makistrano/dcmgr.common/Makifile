@@ -1,0 +1,132 @@
+#!/bin/bash
+#
+# $ maki [role]             [task]
+# $ maki [role] [namespace]:[task]
+#
+
+export LANG=C
+export LC_ALL=C
+
+# global settings
+
+# role
+
+role_solo() {
+  nodes() { echo localhost; }
+  ssh() { shift; [[ $# == 0 ]] && { eval $SHELL </dev/stdin; } || { eval $@; }; }
+}
+
+# namespace:task
+
+namespace_deploy() {
+  task_download() {
+    local host=${1}; shift
+  }
+
+  task_sync() {
+    local host=${1}; shift
+  }
+
+  task_prepare() {
+    local host=${1}; shift
+  }
+
+  task_setup() {
+    local host=${1}; shift
+  }
+
+  task_status() {
+    local host=${1}; shift
+  }
+
+  task_start() {
+    local host=${1}; shift
+  }
+
+  task_stop() {
+    local host=${1}; shift
+  }
+}
+
+namespace_service() {
+  task_status() {
+    local host=${1}; shift
+
+    ssh ${host} bash -ex <<-'EOS'
+	sudo /etc/init.d/drbd status
+	sudo /etc/init.d/rabbitmq-server status
+	sudo initctl status vdc-collector
+	sudo initctl status vdc-dcmgr
+	sudo initctl status vdc-dolphin
+	sudo initctl status vdc-nwmongw
+	sudo /etc/init.d/td-agent status
+	EOS
+  }
+
+  task_on() {
+    local host=${1}; shift
+  }
+
+  task_off() {
+    local host=${1}; shift
+  }
+
+  task_start() {
+    local host=${1}; shift
+
+    ssh ${host} bash -ex <<-'EOS'
+	sudo /etc/init.d/td-agent restart
+	sudo initctl start vdc-collector RUN=yes; sleep 3
+	sudo initctl start vdc-dcmgr     RUN=yes; sleep 3
+	sudo initctl start vdc-dolphin   RUN=yes; sleep 3
+	sudo initctl start vdc-nwmongw   RUN=yes; sleep 3
+	EOS
+  }
+
+  task_stop() {
+    local host=${1}; shift
+
+    ssh ${host} bash -ex <<-'EOS'
+	sudo initctl stop vdc-collector || :
+	sudo initctl stop vdc-dcmgr     || :
+	sudo initctl stop vdc-dolphin   || :
+	sudo initctl stop vdc-nwmongw   || :
+	EOS
+  }
+}
+
+namespace_db() {
+  task_init() {
+    local host=${1}; shift
+  }
+}
+
+namespace_logging() {
+  task_tail_lines() {
+    local host=${1}; shift
+  }
+}
+
+namespace_test() {
+  task_hostname() {
+    local host=${1}; shift
+
+    ssh ${host} hostname
+  }
+
+  task_date() {
+    local host=${1}; shift
+
+    ssh ${host} date
+  }
+
+  task_shell() {
+    local host=${1}; shift
+
+    ssh ${host} ${@}
+  }
+
+  task_run() {
+    local host=${1}; shift
+  }
+}

@@ -1,0 +1,140 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<project>
+  <actions/>
+  <description>for Makifile generating&#xd;
+</description>
+  <keepDependencies>false</keepDependencies>
+  <properties>
+    <jenkins.plugins.hipchat.HipChatNotifier_-HipChatJobProperty plugin="hipchat@0.1.5">
+      <room></room>
+      <startNotification>false</startNotification>
+      <notifySuccess>false</notifySuccess>
+      <notifyAborted>false</notifyAborted>
+      <notifyNotBuilt>false</notifyNotBuilt>
+      <notifyUnstable>false</notifyUnstable>
+      <notifyFailure>false</notifyFailure>
+      <notifyBackToNormal>false</notifyBackToNormal>
+    </jenkins.plugins.hipchat.HipChatNotifier_-HipChatJobProperty>
+    <hudson.queueSorter.PrioritySorterJobProperty plugin="PrioritySorter@1.3">
+      <priority>100</priority>
+    </hudson.queueSorter.PrioritySorterJobProperty>
+    <com.sonyericsson.rebuild.RebuildSettings plugin="rebuild@1.20">
+      <autoRebuild>false</autoRebuild>
+    </com.sonyericsson.rebuild.RebuildSettings>
+    <hudson.model.ParametersDefinitionProperty>
+      <parameterDefinitions>
+        <hudson.model.StringParameterDefinition>
+          <name>download_baseurl</name>
+          <description>### example
+
+```
+http://path/to/eieb
+```
+
+### for following jobs
+
++ hva-download
++ sysvm-download
++ muscle-download
+</description>
+          <defaultValue></defaultValue>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.TextParameterDefinition>
+          <name>sync_sysvm_addr_hash</name>
+          <description>### syntax
+
+```
+sysvmvm_name=pysical_addr
+```
+
+#### example
+
+```
+webui01=10.x.7.41
+webui02=10.x.7.42
+
+dcmgr01=10.x.7.41
+dcmgr02=10.x.7.42
+
+image_st01=10.x.7.41
+image_st02=10.x.7.42
+
+db01=10.x.7.41
+db02=10.x.7.42
+
+u_monitor01=10.x.7.41
+u_monitor02=10.x.7.42
+
+natbox01=10.x.7.41
+natbox02=10.x.7.42
+```
+
+### for nodes() in makistrano/$(vmname)/Makifile
+
++ makistrano/webui/Makifile
++ makistrano/dcmgr/Makifile
++ makistrano/image_st/Makifile
++ makistrano/db/Makifile
++ makistrano/u_monitor/Makifile
++ makistrano/natbox/Makifile
+</description>
+          <defaultValue></defaultValue>
+        </hudson.model.TextParameterDefinition>
+        <hudson.model.TextParameterDefinition>
+          <name>sync_hva_addr_array</name>
+          <description>### for nodes() in makistrano/hva/Makifile
+
+#### example
+
+```
+10.x.7.43
+10.x.7.44
+10.x.7.45
+```
+</description>
+          <defaultValue></defaultValue>
+        </hudson.model.TextParameterDefinition>
+      </parameterDefinitions>
+    </hudson.model.ParametersDefinitionProperty>
+  </properties>
+  <scm class="hudson.scm.NullSCM"/>
+  <canRoam>true</canRoam>
+  <disabled>false</disabled>
+  <blockBuildWhenDownstreamBuilding>false</blockBuildWhenDownstreamBuilding>
+  <blockBuildWhenUpstreamBuilding>false</blockBuildWhenUpstreamBuilding>
+  <triggers/>
+  <concurrentBuild>false</concurrentBuild>
+  <builders>
+    <hudson.tasks.Shell>
+      <command>#!/bin/bash
+#
+# requires:
+#  bash
+#
+set -e
+set -o pipefail
+set -x
+
+###
+
+[[ -n &quot;${download_baseurl}&quot;     ]] || { echo &quot;empty&quot; &gt;&amp;2; exit 1; }
+[[ -n &quot;${sync_sysvm_addr_hash}&quot; ]] || { echo &quot;empty&quot; &gt;&amp;2; exit 1; }
+[[ -n &quot;${sync_hva_addr_array}&quot;  ]] || { echo &quot;empty&quot; &gt;&amp;2; exit 1; }
+
+###
+
+cat &lt;&lt;EOS
+download_baseurl=&quot;${download_baseurl}&quot;
+
+sync_sysvm_addr_hash=&quot;${sync_sysvm_addr_hash}&quot;
+
+sync_hva_addr_array=&quot;${sync_hva_addr_array}&quot;
+EOS
+</command>
+    </hudson.tasks.Shell>
+  </builders>
+  <publishers/>
+  <buildWrappers>
+    <hudson.plugins.timestamper.TimestamperBuildWrapper plugin="timestamper@1.5.6"/>
+  </buildWrappers>
+</project>

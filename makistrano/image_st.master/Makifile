@@ -1,0 +1,22 @@
+#!/bin/bash
+#
+# $ maki [role]             [task]
+# $ maki [role] [namespace]:[task]
+#
+
+. ../image_st.common/Makifile
+
+# global settings
+
+# role
+
+role_solo() {
+  nodes() { echo localhost; }
+  ssh() { shift; [[ $# == 0 ]] && { eval $SHELL </dev/stdin; } || { eval $@; }; }
+}
+
+role_prototyping() {
+  nodes() { echo 10.112.7.25; }
+}
+
+# namespace:task

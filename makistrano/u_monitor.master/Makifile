@@ -1,0 +1,88 @@
+#!/bin/bash
+#
+# $ maki [role]             [task]
+# $ maki [role] [namespace]:[task]
+#
+
+. ../u_monitor.common/Makifile
+
+# global settings
+
+# role
+
+role_prototyping() {
+  nodes() { echo 10.112.7.54; }
+}
+
+# namespace:task
+
+namespace_db() {
+  task_prepare() {
+    local host=${1}; shift
+
+    ssh ${host} bash -ex <<-'EOS'
+	if ! mysqladmin -uroot ping >/dev/null 2>&1; then
+	  sudo service mysqld start
+	fi
+
+	[[ -f /etc/zabbix/zabbix_server.conf ]]
+	. /etc/zabbix/zabbix_server.conf
+
+	if ! mysql -uroot ${DBName} -e 'show tables;' >/dev/null 2>&1; then
+	  mysqladmin -uroot create ${DBName} --default-character-set=utf8
+	fi
+	mysql -uroot <<_EOS_
+	  grant all privileges on ${DBName}.* to ${DBUser}@localhost identified by '${DBName}';
+	  flush privileges;
+	_EOS_
+	mysql -uroot <<_EOS_
+	  grant replication slave on *.* to repl@'10.112.5.54' identified by '${DBPassword}';
+	  grant replication slave on *.* to repl@'10.112.5.55' identified by '${DBPassword}';
+	  GRANT SELECT ON ${DBName}.* to ro_${DBUser}@'localhost' IDENTIFIED BY '${DBPassword}';
+	  GRANT ALTER, CREATE, CREATE VIEW, DELETE, DROP, INDEX, INSERT, LOCK TABLES, SELECT, UPDATE ON ${DBName}.* to ${DBUser}@'localhost' IDENTIFIED BY '${DBPassword}';
+	  flush privileges;
+	_EOS_
+
+	if ! mysql -s -uroot <<< "select plugin_name from information_schema.plugins where plugin_name = 'rpl_semi_sync_master';" \
+             | egrep -q -w rpl_semi_sync_master; then
+	  mysql -uroot <<_EOS_
+	    install plugin rpl_semi_sync_master soname 'semisync_master.so';
+	    flush privileges;
+	_EOS_
+	fi
+	EOS
+  }
+
+  task_setup() {
+    local host=${1}; shift
+
+    ssh ${host} bash -ex <<-'EOS'
+	[[ -f /etc/zabbix/zabbix_server.conf ]]
+	. /etc/zabbix/zabbix_server.conf
+
+	zabbix_ver=$(rpm -qa --qf '%{Version}\n' zabbix-server)
+	[[ -n "${zabbix_ver}" ]]
+
+	mysql -uroot ${DBName} < /usr/share/doc/zabbix-server-mysql-${zabbix_ver}/create/schema/mysql.sql
+	mysql -uroot ${DBName} < /usr/share/doc/zabbix-server-mysql-${zabbix_ver}/create/data/data.sql
+	mysql -uroot ${DBName} < /usr/share/doc/zabbix-server-mysql-${zabbix_ver}/create/data/images_mysql.sql
+
+	sudo service mysqld stop
+	EOS
+  }
+
+  task_drop() {
+    local host=${1}; shift
+
+    ssh ${host} bash -ex <<-'EOS'
+	[[ -f /etc/zabbix/zabbix_server.conf ]]
+	. /etc/zabbix/zabbix_server.conf
+
+	if mysql -uroot ${DBName} -e 'show tables;' >/dev/null 2>&1; then
+	  mysqladmin -uroot drop ${DBName} <<< Y
+	fi
+
+	sudo service mysqld stop
+	EOS
+  }
+}

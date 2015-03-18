@@ -1,0 +1,52 @@
+#!/bin/bash
+#
+# $ maki [role]             [task]
+# $ maki [role] [namespace]:[task]
+#
+
+. ../dcmgr.common/Makifile
+
+# global settings
+
+# role
+
+role_prototyping() {
+  nodes() { echo 10.112.7.19; }
+}
+
+# namespace:task
+
+namespace_deploy() {
+  task_download() {
+    local host=${1}; shift
+  }
+
+  task_sync() {
+    local host=${1}; shift
+  }
+
+  task_prepare() {
+    local host=${1}; shift
+
+    ssh ${host} bash -ex <<-'EOS'
+	sudo service drbd start
+	sudo service drbd status
+	EOS
+  }
+
+  task_setup() {
+    local host=${1}; shift
+  }
+
+  task_status() {
+    local host=${1}; shift
+  }
+
+  task_start() {
+    local host=${1}; shift
+  }
+
+  task_stop() {
+    local host=${1}; shift
+  }
+}

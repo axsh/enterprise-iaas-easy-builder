@@ -1,0 +1,147 @@
+#!/bin/bash
+#
+# $ maki [role]             [task]
+# $ maki [role] [namespace]:[task]
+#
+
+export LANG=C
+export LC_ALL=C
+
+# global settings
+
+# role
+
+role_solo() {
+  nodes() { echo localhost; }
+  ssh() { shift; [[ $# == 0 ]] && { eval $SHELL </dev/stdin; } || { eval $@; }; }
+}
+
+role_prototyping() {
+  nodes() { echo 10.112.7.18; }
+}
+
+# namespace:task
+
+namespace_deploy() {
+  task_download() {
+    local host=${1}; shift
+
+    if ! [[ -f /var/tmp/vdc-manage.tar.gz ]]; then
+      curl -fSkLR http://eieb.dlc.wakame.axsh.jp/eieb/yoyogi/vdc-manage/current/vdc-manage.tar.gz -o /var/tmp/vdc-manage.tar.gz
+    fi
+  }
+
+  task_sync() {
+    local host=${1}; shift
+
+    rsync -avx --progress /var/tmp/vdc-manage.tar.gz ${host}:/var/tmp/vdc-manage.tar.gz
+  }
+
+  task_prepare() {
+    local host=${1}; shift
+
+    ssh ${host} bash -ex <<-'EOS'
+	cd /opt/axsh/wakame-vdc/dcmgr
+	time /opt/axsh/wakame-vdc/ruby/bin/bundle exec rake db:init --trace
+	EOS
+  }
+
+  task_setup() {
+    local host=${1}; shift
+
+    ssh ${host} bash -ex <<-'EOS'
+	ls -l /var/tmp/vdc-manage.tar.gz
+	sudo mkdir -p /var/lib/eieb/vdc-manage
+	sudo tar zxf /var/tmp/vdc-manage.tar.gz -C /var/lib/eieb/vdc-manage
+	find /var/lib/eieb/vdc-manage -type f | sort | xargs cat | egrep -v '^#|^$' | /opt/axsh/wakame-vdc/dcmgr/bin/vdc-manage
+	EOS
+  }
+
+  task_status() {
+    local host=${1}; shift
+  }
+
+  task_start() {
+    local host=${1}; shift
+  }
+
+  task_stop() {
+    local host=${1}; shift
+  }
+}
+
+namespace_service() {
+  task_status() {
+    local host=${1}; shift
+
+    ssh ${host} bash -ex <<-'EOS'
+	sudo service vipple status
+	EOS
+
+    ssh ${host} bash -ex <<-'EOS'
+	/opt/axsh/wakame-vdc/dcmgr/bin/vdc-manage host shownodes
+	EOS
+  }
+
+  task_on() {
+    local host=${1}; shift
+  }
+
+  task_off() {
+    local host=${1}; shift
+  }
+
+  task_start() {
+    local host=${1}; shift
+
+    ssh ${host} bash -ex <<-'EOS'
+	sudo service vipple start
+	sudo chkconfig --list vipple
+	sudo chkconfig vipple on
+	EOS
+  }
+
+  task_stop() {
+    local host=${1}; shift
+
+    ssh ${host} bash -ex <<-'EOS'
+	sudo service vipple stop
+	EOS
+  }
+}
+
+namespace_db() {
+  task_init() {
+    local host=${1}; shift
+  }
+}
+
+namespace_logging() {
+  task_tail_lines() {
+    local host=${1}; shift
+  }
+}
+
+namespace_test() {
+  task_hostname() {
+    local host=${1}; shift
+
+    ssh ${host} hostname
+  }
+
+  task_date() {
+    local host=${1}; shift
+
+    ssh ${host} date
+  }
+
+  task_shell() {
+    local host=${1}; shift
+
+    ssh ${host} ${@}
+  }
+
+  task_run() {
+    local host=${1}; shift
+  }
+}

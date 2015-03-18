@@ -1,0 +1,136 @@
+#!/bin/bash
+#
+# $ maki [role]             [task]
+# $ maki [role] [namespace]:[task]
+#
+
+export LANG=C
+export LC_ALL=C
+
+# global settings
+
+# role
+
+role_solo() {
+  nodes() { echo localhost; }
+  ssh() { shift; [[ $# == 0 ]] && { eval $SHELL </dev/stdin; } || { eval $@; }; }
+}
+
+role_prototyping() {
+  nodes() { echo localhost; }
+  ssh() { shift; [[ $# == 0 ]] && { eval $SHELL </dev/stdin; } || { eval $@; }; }
+}
+
+# namespace:task
+
+namespace_deploy() {
+  task_download() {
+    local host=${1}; shift
+  }
+
+  task_sync() {
+    local host=${1}; shift
+  }
+
+  task_prepare() {
+    local host=${1}; shift
+  }
+
+  task_setup() {
+    local host=${1}; shift
+  }
+
+  task_status() {
+    local host=${1}; shift
+  }
+
+  task_start() {
+    local host=${1}; shift
+
+    for i in $(targets); do
+      case "${MAKISTRANO_ROLE}" in
+        prototyping)
+          # work-around for verification environment
+          ssh ${host} bash -ex <<-EOS
+	    cd /data/image
+	    sudo qemu-img create -b ${i%%.raw}.raw -f qcow2 ${i%%.raw}.qcow2
+	EOS
+        ;;
+      esac
+
+      ssh ${host} bash -ex <<-EOS
+	cd /data/image
+	sudo ./run-${i}.sh
+	EOS
+    done
+  }
+
+  task_stop() {
+    local host=${1}; shift
+
+    ssh ${host} bash -ex <<-EOS
+	cd /data/image
+	if [[ -f ${i}.pid ]]; then
+	  sudo kill \$(sudo head -1 ${i}.pid)
+	fi
+	EOS
+  }
+}
+
+namespace_service() {
+  task_status() {
+    local host=${1}; shift
+  }
+
+  task_on() {
+    local host=${1}; shift
+  }
+
+  task_off() {
+    local host=${1}; shift
+  }
+
+  task_start() {
+    local host=${1}; shift
+  }
+
+  task_stop() {
+    local host=${1}; shift
+  }
+}
+
+namespace_db() {
+  task_init() {
+    local host=${1}; shift
+  }
+}
+
+namespace_logging() {
+  task_tail_lines() {
+    local host=${1}; shift
+  }
+}
+
+namespace_test() {
+  task_hostname() {
+    local host=${1}; shift
+
+    ssh ${host} hostname
+  }
+
+  task_date() {
+    local host=${1}; shift
+
+    ssh ${host} date
+  }
+
+  task_shell() {
+    local host=${1}; shift
+
+    ssh ${host} ${@}
+  }
+
+  task_run() {
+    local host=${1}; shift
+  }
+}

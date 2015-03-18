@@ -1,0 +1,236 @@
+#!/bin/bash
+#
+# $ maki [role]             [task]
+# $ maki [role] [namespace]:[task]
+#
+
+export LANG=C
+export LC_ALL=C
+
+# global settings
+
+# role
+
+role_solo() {
+  nodes() { echo localhost; }
+  ssh() { shift; [[ $# == 0 ]] && { eval $SHELL </dev/stdin; } || { eval $@; }; }
+  targets() { echo localhost; }
+}
+
+role_prototyping() {
+  nodes() { echo 10.112.7.41; }
+  targets() { echo "${TARGETS:-"db01-01 dcmgr01-01 dcmgr02-01 image_st01-01 u_monitor03-01 u_monitor04-01 muscle01-01"}"; }
+}
+
+# namespace:task
+
+namespace_deploy() {
+  task_download() {
+    local host=${1}; shift
+
+    if ! [[ -f /var/tmp/hva-yum-repo.tar.gz ]]; then
+      curl -fSkLR http://eieb.dlc.wakame.axsh.jp/eieb/yoyogi/yumrepo/current/current.tar.gz -o /var/tmp/hva-yum-repo.tar.gz
+    fi
+
+    if ! [[ -f /var/tmp/kemumaki-init.sh ]]; then
+      curl -fSkLR https://raw.githubusercontent.com/wakameci/wakame-ci-cluster/master/kvm-guests/common/kemumaki-init.sh -o /var/tmp/kemumaki-init.sh
+    fi
+    chmod +x /var/tmp/kemumaki-init.sh
+
+    for i in $(targets); do
+      [[ -f /var/tmp/${i}.tar.gz ]] || curl -fSkLR http://eieb.dlc.wakame.axsh.jp/vmapp/eieb-region/01_kyt-eieb/current/${i}.tar.gz -o /var/tmp/${i}.tar.gz
+    done
+  }
+
+  task_sync() {
+    local host=${1}; shift
+
+    rsync -avx --progress /var/tmp/hva-yum-repo.tar.gz ${host}:/var/tmp/hva-yum-repo.tar.gz
+    rsync -avx --progress /var/tmp/kemumaki-init.sh    ${host}:/var/tmp/kemumaki-init.sh
+
+    for i in $(targets); do
+      ssh ${host} bash -ex <<-EOS
+	sudo mkdir -p -m 755 /data/boxes
+	sudo mkdir -p -m 755 /data/image/execscript
+	sudo mkdir -p -m 755 /data/image/keys
+	sudo chmod 755 /data/boxes
+	sudo chmod 755 /data/image/execscript
+	sudo chmod 755 /data/image/keys
+	sudo chown eieb-deploy:eieb-deploy /data/boxes
+	sudo chown eieb-deploy:eieb-deploy /data/image/execscript
+	sudo chown eieb-deploy:eieb-deploy /data/image/keys
+	EOS
+      rsync -avx --progress /var/tmp/${i}.tar.gz ${host}:/data/boxes/${i}.tar.gz
+    done
+
+    rsync -avx --progress execscript ${host}:/data/image/
+    rsync -avx --progress keys/*.pub ${host}:/data/image/keys/
+  }
+
+  task_prepare() {
+    local host=${1}; shift
+
+    ssh ${host} bash -ex <<-'EOS'
+	sudo mkdir -p /var/lib/eieb/yum/wakame-vdc/current
+	sudo tar zxf /var/tmp/hva-yum-repo.tar.gz -C /var/lib/eieb/yum/wakame-vdc/current/
+	sudo rsync -avx --progress /var/lib/eieb/yum/wakame-vdc/current/repofiles/ /etc/yum.repos.d/
+	sudo yum clean metadata
+	sudo yum repolist
+	EOS
+
+    for i in $(targets); do
+      ssh ${host} bash -ex <<-EOS
+	sudo mkdir -p -m 755 /data/image
+	cd /data/image
+	[[ -f ${i}.raw ]] || sudo tar zxvf /data/boxes/${i}.tar.gz
+	EOS
+    done
+  }
+
+  task_setup() {
+    local host=${1}; shift
+
+    ssh ${host} bash -ex <<-'EOS'
+	# install meta packages
+	rpm -qa epel-release* | egrep -q epel-release || {
+	  sudo yum install --disablerepo='*' -y /var/lib/eieb/yum/wakame-vdc/current/6.4/epel/packages/epel-release-6-8.noarch.rpm
+	}
+	rpm -qa zabbix-jp-release* | egrep -q zabbix-jp-release || {
+	  sudo yum install --disablerepo='*' -y /var/lib/eieb/yum/wakame-vdc/current/6.4/zabbix-jp-relatedpkgs/packages/zabbix-jp-release-6-6.noarch.rpm
+	}
+	# install packages
+	pkgs="
+	 git ltrace make man nfs-utils nmap rpcbind rsync screen strace tcpdump telnet traceroute bind-utils trickle
+	 qemu-kvm qemu-img kpartx
+	"
+        for pkg in ${pkgs}; do
+          rpm -qa ${pkg} | egrep -q ${pkg} || sudo yum install -y ${pkg}
+        done
+	EOS
+
+    # TODO
+    # * kpartx -va [raw]
+    # * mount /dev/mapper/loopNpN mnt
+    # * apply ssh public key
+    # * configure ip address(es)
+    # * umount mnt
+    # * kpartx -vd [raw]
+    for i in $(targets); do
+      ssh ${host} bash -ex <<-EOS
+	hostname
+	EOS
+    done
+  }
+
+  task_status() {
+    local host=${1}; shift
+
+    for i in $(targets); do
+      ssh ${host} bash -ex <<-EOS
+	cd /data/image
+	for suffix in raw pid; do
+	  [[ -f ${i}.\${suffix} ]] || continue
+	  ls -l ${i}.\${suffix}
+	done
+	EOS
+    done
+  }
+
+  task_start() {
+    local host=${1}; shift
+
+    for i in $(targets); do
+      case "${MAKISTRANO_ROLE}" in
+        prototyping)
+          # work-around for verification environment
+          ssh ${host} bash -ex <<-EOS
+	    cd /data/image
+	    sudo sed -i \
+	     -e 's,^mem_size=4096,mem_size=2048,' \
+	     -e 's,\.raw,.qcow2,' \
+	     -e "s,-daemonize\$,-daemonize -serial file:${i}.console," \
+	     ./run-${i}.sh
+	    sudo sudo raw=${i%%.raw}.raw /var/tmp/kemumaki-init.sh
+	    sudo qemu-img create -b ${i%%.raw}.raw -f qcow2 ${i%%.raw}.qcow2
+	EOS
+          ;;
+      esac
+
+      ssh ${host} bash -ex <<-EOS
+	cd /data/image
+	sudo ./run-${i}.sh
+	EOS
+    done
+  }
+
+  task_stop() {
+    local host=${1}; shift
+
+    for i in $(targets); do
+      ssh ${host} bash -ex <<-EOS
+	cd /data/image
+	if [[ -f ${i}.pid ]]; then
+	  sudo kill \$(sudo head -1 ${i}.pid)
+	fi
+	EOS
+    done
+  }
+}
+
+namespace_service() {
+  task_status() {
+    local host=${1}; shift
+  }
+
+  task_on() {
+    local host=${1}; shift
+  }
+
+  task_off() {
+    local host=${1}; shift
+  }
+
+  task_start() {
+    local host=${1}; shift
+  }
+
+  task_stop() {
+    local host=${1}; shift
+  }
+}
+
+namespace_db() {
+  task_init() {
+    local host=${1}; shift
+  }
+}
+
+namespace_logging() {
+  task_tail_lines() {
+    local host=${1}; shift
+  }
+}
+
+namespace_test() {
+  task_hostname() {
+    local host=${1}; shift
+
+    ssh ${host} hostname
+  }
+
+  task_date() {
+    local host=${1}; shift
+
+    ssh ${host} date
+  }
+
+  task_shell() {
+    local host=${1}; shift
+
+    ssh ${host} ${@}
+  }
+
+  task_run() {
+    local host=${1}; shift
+  }
+}

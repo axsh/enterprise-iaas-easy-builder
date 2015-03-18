@@ -1,0 +1,17 @@
+#!/bin/bash
+#
+# $ maki [role]             [task]
+# $ maki [role] [namespace]:[task]
+#
+
+. ../u_monitor.common/Makifile
+
+# global settings
+
+# role
+
+role_prototyping() {
+  nodes() { echo 10.112.7.55; }
+}
+
+# namespace:task

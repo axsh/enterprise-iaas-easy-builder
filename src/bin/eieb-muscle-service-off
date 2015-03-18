@@ -1,0 +1,12 @@
+#!/bin/bash
+#
+# requires:
+#  bash
+#
+set -e
+set -o pipefail
+set -x
+
+# Do something...
+
+MAKISTRANO_MAKIFILE=/opt/axsh/eieb/makistrano/muscle/Makifile /usr/local/bin/maki ${MAKI_ROLE:-solo} service:off

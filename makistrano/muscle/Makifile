@@ -1,0 +1,143 @@
+#!/bin/bash
+#
+# $ maki [role]             [task]
+# $ maki [role] [namespace]:[task]
+#
+
+export LANG=C
+export LC_ALL=C
+
+# global settings
+
+# role
+
+role_solo() {
+  nodes() { echo localhost; }
+  ssh() { shift; [[ $# == 0 ]] && { eval $SHELL </dev/stdin; } || { eval $@; }; }
+}
+
+role_prototyping() {
+  nodes() { echo 10.112.7.47; }
+}
+
+# namespace:task
+
+namespace_deploy() {
+  task_download() {
+    local host=${1}; shift
+
+    if ! [[ -f /var/tmp/gitlocal.tar.gz ]]; then
+      curl -fSkLR http://eieb.dlc.wakame.axsh.jp/eieb/yoyogi/gitrepo/current/gitlocal.tar.gz -o /var/tmp/gitlocal.tar.gz
+    fi
+  }
+
+  task_sync() {
+    local host=${1}; shift
+
+    rsync -avx --progress /var/tmp/gitlocal.tar.gz ${host}:/var/tmp/gitlocal.tar.gz
+  }
+
+  task_prepare() {
+    local host=${1}; shift
+
+    ssh ${host} bash -ex <<-'EOS'
+	tar zxf /var/tmp/gitlocal.tar.gz -C /var/tmp/
+	EOS
+  }
+
+  task_setup() {
+    local host=${1}; shift
+
+#	sudo -s
+#	sudo service jenkins stop
+#
+#	sudo sed -i 's,https://.*github.com/axsh/wakame-vdc-mita.git,/var/tmp/gitlocal/wakame-vdc-mita,' \
+#	  /var/lib/jenkins/jobs/*/config.xml
+#	sudo sed -i 's,https://.*github.com/axsh/hipchat-cli.git,/var/tmp/gitlocal/hipchat-cli,' \
+#	  /var/lib/jenkins/jobs/*/config.xml
+#	sudo sed -i 's,https://.*github.com/axsh/wakame-vdc.git,/var/tmp/gitlocal/wakame-vdc,' \
+#	  /var/lib/jenkins/jobs/*/config.xml
+#	sudo sed -i 's,https://.*github.com/hansode/hipchat-bash.git,/var/tmp/gitlocal/hipchat-bash,' \
+#	  /var/lib/jenkins/jobs/*/config.xml
+#	sudo sed -i 's,https://.*github.com/hansode/zabbix-bash,/var/tmp/gitlocal/zabbix-bash,' \
+#	  /var/lib/jenkins/jobs/*/config.xml
+#	sudo sed -i 's,https://.*github.com/rcrowley/json.sh,/var/tmp/gitlocal/json.sh,' \
+#	  /var/lib/jenkins/jobs/*/config.xml
+#
+#	sudo rm -rf /var/lib/jenkins/jobs/*/builds
+#	sudo rm -rf /var/lib/jenkins/jobs/*/workspace
+#
+#	sudo service jenkins start
+#	sudo service jenkins status
+  }
+
+  task_status() {
+    local host=${1}; shift
+  }
+
+  task_start() {
+    local host=${1}; shift
+  }
+
+  task_stop() {
+    local host=${1}; shift
+  }
+}
+
+namespace_service() {
+  task_status() {
+    local host=${1}; shift
+  }
+
+  task_on() {
+    local host=${1}; shift
+  }
+
+  task_off() {
+    local host=${1}; shift
+  }
+
+  task_start() {
+    local host=${1}; shift
+  }
+
+  task_stop() {
+    local host=${1}; shift
+  }
+}
+
+namespace_db() {
+  task_init() {
+    local host=${1}; shift
+  }
+}
+
+namespace_logging() {
+  task_tail_lines() {
+    local host=${1}; shift
+  }
+}
+
+namespace_test() {
+  task_hostname() {
+    local host=${1}; shift
+
+    ssh ${host} hostname
+  }
+
+  task_date() {
+    local host=${1}; shift
+
+    ssh ${host} date
+  }
+
+  task_shell() {
+    local host=${1}; shift
+
+    ssh ${host} ${@}
+  }
+
+  task_run() {
+    local host=${1}; shift
+  }
+}

@@ -1,0 +1,164 @@
+#!/bin/bash
+#
+# $ maki [role]             [task]
+# $ maki [role] [namespace]:[task]
+#
+
+export LANG=C
+export LC_ALL=C
+
+# global settings
+
+# role
+
+role_solo() {
+  nodes() { echo localhost; }
+  ssh() { shift; [[ $# == 0 ]] && { eval $SHELL </dev/stdin; } || { eval $@; }; }
+}
+
+role_prototyping() {
+  nodes() { echo 10.112.7.{43..45}; }
+}
+
+# namespace:task
+
+namespace_deploy() {
+  task_download() {
+    local host=${1}; shift
+
+    if ! [[ -f /var/tmp/hva-yum-repo.tar.gz ]]; then
+      curl -fSkLR http://eieb.dlc.wakame.axsh.jp/eieb/yoyogi/yumrepo/current/current.tar.gz -o /var/tmp/hva-yum-repo.tar.gz
+    fi
+  }
+
+  task_sync() {
+    local host=${1}; shift
+
+    rsync -avx --progress /var/tmp/hva-yum-repo.tar.gz ${host}:/var/tmp/hva-yum-repo.tar.gz
+  }
+
+  task_prepare() {
+    local host=${1}; shift
+
+    ssh ${host} bash -ex <<-'EOS'
+	sudo mkdir -p /var/lib/eieb/yum/wakame-vdc/current
+	sudo tar zxf /var/tmp/hva-yum-repo.tar.gz -C /var/lib/eieb/yum/wakame-vdc/current/
+	sudo rsync -avx --progress /var/lib/eieb/yum/wakame-vdc/current/repofiles/ /etc/yum.repos.d/
+	sudo yum clean metadata
+	sudo yum repolist
+	EOS
+  }
+
+  task_setup() {
+    local host=${1}; shift
+
+    ssh ${host} bash -ex <<-'EOS'
+	# install meta packages
+	rpm -qa epel-release* | egrep -q epel-release || {
+	  sudo yum install --disablerepo='*' -y /var/lib/eieb/yum/wakame-vdc/current/6.4/epel/packages/epel-release-6-8.noarch.rpm
+	}
+	rpm -qa zabbix-jp-release* | egrep -q zabbix-jp-release || {
+	  sudo yum install --disablerepo='*' -y /var/lib/eieb/yum/wakame-vdc/current/6.4/zabbix-jp-relatedpkgs/packages/zabbix-jp-release-6-6.noarch.rpm
+	}
+	# install packages
+	pkgs="
+	 wakame-vdc-hva-kvm-vmapp-config
+	 td-agent
+	 zabbix-agent
+	 git ltrace make man nfs-utils nmap rpcbind rsync screen strace tcpdump telnet traceroute bind-utils trickle
+	"
+	for pkg in ${pkgs}; do
+	  rpm -qa ${pkg} | egrep -q ${pkg} || sudo yum install -y ${pkg}
+	done
+	sudo mkdir -p /data/instances
+	sudo mkdir -p /data/instances/tmp
+	EOS
+  }
+
+  task_status() {
+    local host=${1}; shift
+  }
+
+  task_start() {
+    local host=${1}; shift
+  }
+
+  task_stop() {
+    local host=${1}; shift
+  }
+}
+
+namespace_service() {
+  task_status() {
+    local host=${1}; shift
+
+    ssh ${host} bash -ex <<-'EOS'
+	sudo initctl status vdc-hva
+	EOS
+  }
+
+  task_on() {
+    local host=${1}; shift
+  }
+
+  task_off() {
+    local host=${1}; shift
+  }
+
+  task_start() {
+    local host=${1}; shift
+
+    ssh ${host} bash -ex <<-'EOS'
+	sudo initctl start vdc-hva RUN=yes
+	EOS
+  }
+
+  task_stop() {
+    local host=${1}; shift
+
+    ssh ${host} bash -ex <<-'EOS'
+	sudo initctl stop vdc-hva
+	EOS
+  }
+}
+
+namespace_db() {
+  task_init() {
+    local host=${1}; shift
+  }
+}
+
+namespace_logging() {
+  task_tail_lines() {
+    local host=${1}; shift
+
+    ssh ${host} bash -ex <<-'EOS'
+	[[ -f /var/log/wakame-vdc/hva.log    ]] && tail -n 20 /var/log/wakame-vdc/hva.log
+	[[ -f /var/log/td-agent/td-agent.log ]] && tail -n 20 /var/log/td-agent/td-agent.log
+	EOS
+  }
+}
+
+namespace_test() {
+  task_hostname() {
+    local host=${1}; shift
+
+    ssh ${host} hostname
+  }
+
+  task_date() {
+    local host=${1}; shift
+
+    ssh ${host} date
+  }
+
+  task_shell() {
+    local host=${1}; shift
+
+    ssh ${host} ${@}
+  }
+
+  task_run() {
+    local host=${1}; shift
+  }
+}
